@@ -46,7 +46,8 @@ class Application():
         self.root.resizable(width=True, height=True)
         self.root.maxsize(700, 600)
         self.root.minsize(670, 590)
-
+        def hehe(a):
+            print a
         self._inited = False
         # 声明上层部件框
         self.menu = Menu(self.root)
@@ -62,7 +63,6 @@ class Application():
 
         self.consoleNor("程序加载完毕！")
         self._inited = True
-
     def __menu(self):
         # 主菜单
         if self._inited:
@@ -71,13 +71,17 @@ class Application():
         self.root.config(menu=self.menu)
         # 文件菜单
         filemenu = Menu(self.menu, name="file")
-        self.menu.add_cascade(label="文件", menu=filemenu)
-        filemenu.add_command(label="打开", command=self._getFileName)
-        filemenu.add_command(label="保存", command=self._save)
-        filemenu.add_command(label="预览", command=self._preview)
+        info = Menu(self.menu)
+        self.menu.add_cascade(label="程序", menu=filemenu)
+        self.menu.add_cascade(label="关于", menu=info)
+        filemenu.add_command(label="打开<C-o>", command=self._getFileName)
+        filemenu.add_command(label="保存<C-s>", command=self._save)
+        filemenu.add_command(label="预览<C-p>", command=self._preview)
 
         filemenu.add_separator()
-        filemenu.add_command(label="退出", command=self.root.quit)
+        filemenu.add_command(label="退出<C-q>", command=self.root.quit)
+
+        info.add_command(label="声明", command=self._info)
 
     def __scrollbar(self):
         if self._inited:
@@ -126,16 +130,15 @@ class Application():
         # 首先是console
         self.console = Text(self.consolepanel, width=45, height=8, bd=1,
                             highlightbackground="grey", highlightthickness=1,
-                            highlightcolor="grey")
+                            highlightcolor="grey", takefocus=0)
         self.console.pack(expand=True, fill=BOTH, padx=5, pady=5)
 
         # 设置不同信息类型的样式
         self.console.tag_config("error", background="red", foreground="white")
         self.console.tag_config("warning", background="yellow", foreground="black")
-        # 设置不能输入
+        # 设置不能输入 takefocus设置是不能被focus到
         self.console.bind("<KeyPress>", lambda x: "break")
-        self.console.focus_force()
-
+        self.console.bind("<Button>", lambda x: "break")
         # 然后是control
         # 设置控制框标签
         self.fileName = StringVar()
@@ -170,7 +173,7 @@ class Application():
         wSize = Entry(self.controlpanel, textvariable=self.wVar, validate="key",
                       validatecommand=(self.root.register(sizeValidate), "%S"),
                       width=7)
-
+        self.focus_entry = wSize
         hSize = Entry(self.controlpanel, textvariable=self.hVar, validate="key",
                       validatecommand=(self.root.register(sizeValidate), "%S"),
                       width=7)
@@ -196,7 +199,7 @@ class Application():
         self.genBtn.grid(row=5, column=2, columnspan=2)
 
 
-    def _getFileName(self):
+    def _getFileName(self, *arg):
         name = tkFileDialog.askopenfilename()
         if name == "": return
         if fileCheck.isImage(name)[0]:
@@ -204,18 +207,20 @@ class Application():
             self.fileName.set("已选择")
             self.consoleNor("选择图片："+os.path.basename(name))
             self._preview(True)
+            return True
         else:
             tkMessageBox.showerror(title="Error",
                                    message="类型错误："
                                    "打开的不是图片呦，是不是打开的方式不对？")
             self.consoleErr("类型错误："+name+
                             "不是图片的类型，或者无法识别类型。")
+            return False
 
     def _preview(self, *arg):
         # 在显示图片的时候需要保存对于那个图片的引用，
         # 否则python会在这个函数结束的时候，image的所有引用都没了，
         # 图片就显示不出来了
-        if not(len(arg) == 0):
+        if not(len(arg) == 0) and arg[0] == True:
             self.wScale = 1
             self.hScale = 1
         else:
@@ -234,7 +239,7 @@ class Application():
                     self.wScale = 1
                     self.hScale = 1
                     self.consoleErr("数值错误：放大倍数非数值类型！")
-                    return
+                    return False
                 else:
                     self.consoleNor("缩放(%0.1f, %0.1f)倍。"%(self.wScale,
                                                                   self.hScale))
@@ -247,7 +252,7 @@ class Application():
                                    "打开的不是图片呦，是不是打开的方式不对？")
             self.consoleErr("类型错误："+name+
                             "不是图片的类型，或者无法识别类型。")
-            return
+            return False
 
         self.canvas.delete(ALL)
         self.image = Image.open(name)
@@ -262,6 +267,7 @@ class Application():
         self.canvas.create_image(0, 0, image=self.tkImage, anchor="nw")
         self.canvas.config(scrollregion=(0, 0, width, height))
         self.consoleNor("预览图片："+os.path.basename(name))
+        return True
 
     def consoleNor(self, message):
         existContent = self.console.get("0.0", END)
@@ -296,9 +302,15 @@ class Application():
         self.vbar.config(command=self.canvas.yview)
         self.canvas.config(xscrollcommand=self.hbar.set,
                            yscrollcommand=self.vbar.set)
+        # 强制转化focus位置
+        # 快捷键绑定
+        self.root.bind_all("<Control-s>", self._save)
+        self.root.bind_all("<Control-o>", self._getFileName)
+        self.root.bind_all("<Control-p>", self._preview)
+        self.root.bind_all("<Control-q>", self._quit)
 
-    def _save(self):
-        self._preview()
+    def _save(self, *argv):
+        if not self._preview(): return
         self.consoleNor("过程控制：图片正在处理中...")
         filepath = tkFileDialog.asksaveasfilename()
 
@@ -327,7 +339,13 @@ class Application():
                 self.consoleErr("过程控制：图片保存过程出现问题...")
         else:
             self.consoleErr("类型错误：打开的不是图片或者是文件不存在！")
-
+    def _info(self):
+        tkMessageBox.showinfo(title="声明", message="作者：杨凯航\ngithub：https://github.com/KaiHangYang/calMethod/tree/master/Lagrange")
+    def _quit(self, *argv):
+        self.root.quit()
 if __name__ == "__main__":
     app = Application()
     app.root.mainloop()
+    def a(event):
+        print "asd"
+    app.console.bind("<Control-s>", a)
